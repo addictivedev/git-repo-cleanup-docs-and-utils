@@ -1,0 +1,340 @@
+---
+description: Gitleaks - Secret Detection Tool for Git Repositories
+alwaysApply: false
+---
+# Gitleaks - Secret Detection Tool
+
+Gitleaks is a tool for detecting secrets like passwords, API keys, and tokens in git repos, files, and other sources via stdin.
+
+## Installation Methods
+
+### Homebrew (macOS)
+```bash
+brew install gitleaks
+```
+
+### Docker
+```bash
+# DockerHub
+docker pull zricethezav/gitleaks:latest
+docker run -v ${path_to_host_folder_to_scan}:/path zricethezav/gitleaks:latest [COMMAND] [OPTIONS] [SOURCE_PATH]
+
+# GitHub Container Registry
+docker pull ghcr.io/gitleaks/gitleaks:latest
+docker run -v ${path_to_host_folder_to_scan}:/path ghcr.io/gitleaks/gitleaks:latest [COMMAND] [OPTIONS] [SOURCE_PATH]
+```
+
+### From Source
+```bash
+git clone https://github.com/gitleaks/gitleaks.git
+cd gitleaks
+make build
+```
+
+## Basic Commands
+
+### Scan Git Repository
+```bash
+# Basic scan with verbose output
+gitleaks git -v
+
+# Scan specific repository
+gitleaks git <REPOSITORY_PATH> -v
+
+# Generate JSON report - CORRECT SYNTAX
+gitleaks git <REPOSITORY_PATH> --report-format json --report-path <OUTPUT_FILE>
+```
+
+### ⚠️ Common Syntax Mistakes
+
+**INCORRECT** (will scan wrong repository):
+```bash
+gitleaks git -r <REPOSITORY_PATH> -v --report-path <OUTPUT_FILE> --report-format json
+```
+
+**CORRECT** (will scan the specified repository):
+```bash
+gitleaks git <REPOSITORY_PATH> --report-format json --report-path <OUTPUT_FILE>
+```
+
+**Key Points:**
+- Use `gitleaks git <REPOSITORY_PATH>` not `gitleaks git -r <REPOSITORY_PATH>`
+- The `-r` flag is not needed and can cause confusion
+- Always specify the repository path as a positional argument
+
+### Scan Directory/Files
+```bash
+gitleaks dir -v path_to_directory_or_file
+```
+
+### Scan from stdin
+```bash
+cat some_file | gitleaks -v stdin
+```
+
+## Configuration
+
+### Configuration Loading Precedence
+1. `--config/-c` command line option
+2. `GITLEAKS_CONFIG` environment variable
+3. `GITLEAKS_CONFIG_TOML` environment variable with file content
+4. `(target path)/.gitleaks.toml`
+5. Default built-in configuration
+
+### Using Custom Configuration
+```bash
+# Command line
+gitleaks git --config /home/dev/customgitleaks.toml .
+
+# Environment variable
+export GITLEAKS_CONFIG="/home/dev/customgitleaks.toml"
+gitleaks git .
+
+# Environment variable with content
+export GITLEAKS_CONFIG_TOML=`cat customgitleaks.toml`
+gitleaks git .
+```
+
+## Configuration File Structure (.gitleaks.toml)
+
+### Basic Configuration
+```toml
+# Title for the gitleaks configuration file
+title = "Custom Gitleaks configuration"
+
+# Extend default configuration
+[extend]
+useDefault = true
+# or specify a path to extend from
+# path = "common_config.toml"
+disabledRules = [ "generic-api-key"]
+
+# Custom rules
+[[rules]]
+id = "awesome-rule-1"
+description = "awesome rule 1"
+regex = '''one-go-style-regex-for-this-rule'''
+secretGroup = 3
+entropy = 3.5
+path = '''a-file-path-regex'''
+keywords = [
+  "auth",
+  "password",
+  "token"
+]
+```
+
+### Global Allowlists
+```toml
+[[allowlists]]
+description = "global allow list"
+commits = [ "commit-A", "commit-B", "commit-C"]
+paths = [
+  '''gitleaks\.toml''',
+  '''(.*?)(jpg|gif|doc)'''
+]
+regexTarget = "match"
+regexes = [
+  '''219-09-9999''',
+  '''078-05-1120''',
+  '''(9[0-9]{2}|666)-\d{2}-\d{4}''',
+]
+stopwords = [
+  '''client''',
+  '''endpoint''',
+]
+```
+
+### Rule-Specific Allowlists
+```toml
+[[rules]]
+id = "gitlab-pat"
+
+[[rules.allowlists]]
+description = "ignore commit A"
+condition = "OR"  # or "AND"
+commits = [ "commit-A", "commit-B"]
+paths = [
+  '''go\.mod''',
+  '''go\.sum'''
+]
+stopwords = [
+  '''client''',
+  '''endpoint''',
+]
+```
+
+### Targeted Allowlists (v8.25.0+)
+```toml
+[[allowlists]]
+targetRules = ["awesome-rule-1", "awesome-rule-2"]
+description = "Our test assets trigger false-positives in a couple rules."
+paths = ['''tests/expected/._\.json$''']
+```
+
+## Reporting
+
+### Generate Reports
+```bash
+# JSON report - CORRECT SYNTAX
+gitleaks git <REPOSITORY_PATH> --report-format json --report-path <OUTPUT_FILE>
+
+# CSV report
+gitleaks git <REPOSITORY_PATH> --report-path report.csv --report-format csv
+
+# SARIF report
+gitleaks git <REPOSITORY_PATH> --report-path report.sarif --report-format sarif
+
+# Custom template report
+gitleaks dir ~/leaky-repo/ --report-path "report.json" --report-format template --report-template testdata/report/jsonextra.tmpl
+```
+
+### Baseline Management
+```bash
+# Create baseline
+gitleaks git <REPOSITORY_PATH> --report-path gitleaks-report.json
+
+# Use baseline to ignore previous findings
+gitleaks git <REPOSITORY_PATH> --baseline-path gitleaks-report.json --report-path findings.json
+```
+
+## Pre-commit Integration
+
+### Pre-commit Hook Configuration
+```yaml
+repos:
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.24.2
+    hooks:
+      - id: gitleaks
+```
+
+### Skip Pre-commit Hook
+```bash
+SKIP=gitleaks git commit -m "skip gitleaks check"
+```
+
+## GitHub Actions Integration
+
+```yaml
+name: gitleaks
+on: [pull_request, push, workflow_dispatch]
+jobs:
+  scan:
+    name: gitleaks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+      - uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITLEAKS_LICENSE: ${{ secrets.GITLEAKS_LICENSE}}
+```
+
+## Advanced Options
+
+### Command Line Flags
+```bash
+# Enable specific rules only
+gitleaks git --enable-rule "aws-access-key" --enable-rule "github-pat"
+
+# Set custom exit code
+gitleaks git --exit-code 0
+
+# Redact secrets in output
+gitleaks git --redact 50  # Redact 50% of secret
+
+# Maximum decode depth for recursive decoding
+gitleaks git --max-decode-depth 3
+
+# Maximum archive depth for nested archives
+gitleaks git --max-archive-depth 2
+
+# Skip files larger than specified size
+gitleaks git --max-target-megabytes 10
+
+# Ignore gitleaks:allow comments
+gitleaks git --ignore-gitleaks-allow
+```
+
+### Inline Secret Ignoring
+```python
+class CustomClass:
+    discord_client_secret = '8dyfuiRyq=vVc3RRr_edRk-fK__JItpZ'  #gitleaks:allow
+```
+
+## Exit Codes
+- `0` - No leaks present
+- `1` - Leaks or error encountered
+- `126` - Unknown flag
+
+## Common Use Cases
+
+### Scan Current Repository
+```bash
+gitleaks git -v
+```
+
+### Scan Specific Repository
+```bash
+gitleaks git <REPOSITORY_PATH> -v
+```
+
+### Generate JSON Report for Specific Repository
+```bash
+gitleaks git <REPOSITORY_PATH> --report-format json --report-path scan-results.json
+```
+
+### Scan Specific Directory
+```bash
+gitleaks dir -v ./src/
+```
+
+### Generate HTML Report
+```bash
+gitleaks git <REPOSITORY_PATH> --report-path=index.html --report-format=template --report-template=report_templates/basic.tmpl
+```
+
+### Custom Rule for API Keys
+```toml
+[[rules]]
+id = "custom-api-key"
+description = "Custom API key pattern"
+regex = '''(?i)(api[_-]?key|apikey)\s*[:=]\s*['"]?([a-zA-Z0-9_-]{20,})['"]?'''
+secretGroup = 2
+entropy = 3.5
+keywords = ["api", "key"]
+```
+
+## Testing and Verification
+
+### Complete Workflow Example
+```bash
+# 1. Scan repository for secrets
+gitleaks git pippo.git --report-format json --report-path scan-results.json
+
+# 2. Run cleanup script (if secrets found)
+./clean-secrets.sh pippo.git scan-results.json --cleanup
+
+# 3. Verify cleanup worked
+gitleaks git pippo.git --report-format json --report-path post-cleanup-scan.json
+```
+
+### Expected Results
+- **Before cleanup**: `WRN leaks found: X`
+- **After cleanup**: `INF no leaks found`
+
+## Integration with Project Files
+
+This project uses gitleaks for:
+- Detecting secrets in repository history
+- Pre-commit validation
+- CI/CD pipeline security scanning
+- Testing secret cleanup tools
+
+Key files in this project:
+- [tests/bats/debug-gitleaks.bats](mdc:tests/bats/debug-gitleaks.bats) - Gitleaks testing
+- [clean-secrets.sh](mdc:clean-secrets.sh) - Secret cleanup script
+- [clean-secrets-callbacks/](mdc:clean-secrets-callbacks/) - Secret detection callbacks

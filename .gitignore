@@ -1,0 +1,14 @@
+head-blobs.txt
+blobs-to-keep.txt
+*.git/
+*.git_original/
+*.git_original_bak/
+*backup*/
+clean-secrets.log
+commit-progress.log
+commit-stats.json
+full-scan.json
+.clean-secrets*
+.clean-large-blobs.log
+__pycache__
+*/__pycache__/

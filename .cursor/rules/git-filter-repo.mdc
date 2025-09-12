@@ -1,0 +1,165 @@
+---
+description: Git Filter Repo - Repository History Rewriting Tool
+globs: *.sh,*.py,*.git*,clean-*.sh,*.gitignore
+---
+
+# Git Filter Repo - Repository History Rewriting
+
+Git filter-repo is a versatile and performant tool for rewriting Git history, recommended by the Git project as a replacement for git filter-branch.
+
+## Key Commands and Usage
+
+### Basic Command Structure
+```bash
+git filter-repo [<path_filtering_options>] [<content_filtering_options>]
+    [<ref_renaming_options>] [<commit_message_filtering_options>]
+    [<name_or_email_filtering_options>] [<parent_rewriting_options>]
+    [<generic_callback_options>] [<miscellaneous_options>]
+```
+
+### Analysis and Planning
+```bash
+# Analyze repository to understand what to filter
+git filter-repo --analyze
+```
+
+### Path Filtering Options
+```bash
+# Include specific paths
+git filter-repo --path src/main/
+git filter-repo --path README.md
+
+# Exclude specific paths (invert selection)
+git filter-repo --invert-paths --path filename
+git filter-repo --invert-paths --path-glob '*.xsa'
+
+# Use glob patterns
+git filter-repo --path-glob 'src/*/data' --invert-paths
+
+# Use regular expressions
+git filter-repo --path-regex '^.*/.*/[0-9]{4}-[0-9]{2}-[0-9]{2}.txt$'
+
+# Filter by basename only
+git filter-repo --use-base-name --path README.md --path Makefile
+
+# Filter from file
+git filter-repo --paths-from-file ../my-relevant-files
+```
+
+### Content Filtering
+```bash
+# Strip large files
+git filter-repo --strip-blobs-bigger-than 10M
+
+# Strip specific blob IDs
+git filter-repo --strip-blobs-with-ids FILE_WITH_GIT_BLOB_IDS
+
+# Replace text in files
+git filter-repo --replace-text <expressions_file>
+```
+
+### Directory Restructuring
+```bash
+# Extract subdirectory as new root
+git filter-repo --subdirectory-filter module/
+
+# Move everything into subdirectory
+git filter-repo --to-subdirectory-filter my-module/
+
+# Rename paths
+git filter-repo --path-rename old-path:new-path
+git filter-repo --path-rename tools/:scripts/
+```
+
+### Advanced Filtering with Callbacks
+```bash
+# Filename callback
+git filter-repo --filename-callback '
+    if filename == b"src/README.md":
+        return None
+    if filename.startswith(b"src/"):
+        return filename
+    return None'
+
+# Commit message callback
+git filter-repo --message-callback 'return message.replace(b"stuff", b"task")'
+
+# Blob callback for content replacement
+git filter-repo --blob-callback '
+    if blob.original_id == b"f4ede2e944868b9a08401dafeb2b944c7166fd0a":
+        blob.data = open("../alternative-file.jpg", "rb").read()
+'
+```
+
+### Safety and Verification
+```bash
+# Force operation (bypass fresh clone check)
+git filter-repo --force
+
+# Dry run to see what would happen
+git filter-repo --dry-run
+
+# Verify objects were removed
+git cat-file -t ${HASH_OF_FIRST_CHANGED_COMMIT}
+git for-each-ref --contains ${HASH_OF_FIRST_CHANGED_COMMIT}
+```
+
+### Post-Processing Cleanup
+```bash
+# Clean up reflogs and garbage collect
+git reflog expire --expire=now --all
+git gc --prune=now
+
+# Push changes
+git push --force --branches --tags --prune
+```
+
+## Important Safety Notes
+
+1. **Always work on fresh clones** - git-filter-repo refuses to run on non-fresh clones by default
+2. **Use --force carefully** - This bypasses safety checks and is irreversible
+3. **Path specification rules**:
+   - Paths are relative to repository root
+   - Use forward slashes `/` regardless of OS
+   - Don't use absolute paths or leading slashes
+   - Don't use `.` or `..` in paths
+
+## Common Use Cases
+
+### Remove Large Files
+```bash
+git filter-repo --strip-blobs-bigger-than 50M
+```
+
+### Remove Sensitive Files
+```bash
+git filter-repo --invert-paths --path config/secrets.yml
+```
+
+### Extract Specific Directory
+```bash
+git filter-repo --subdirectory-filter src/main/
+```
+
+### Clean Up File Extensions
+```bash
+git filter-repo --invert-paths --path-glob '*.log'
+```
+
+### Replace Sensitive Text
+```bash
+git filter-repo --replace-text <(echo 'password123=>***REMOVED***')
+```
+
+## Integration with Project Files
+
+This project uses git-filter-repo for:
+- Cleaning large blobs from repository history
+- Removing sensitive data and secrets
+- Repository restructuring and migration
+
+Key files in this project:
+- [clean-large-blobs.sh](mdc:clean-large-blobs.sh) - Script for removing large files
+- [clean-secrets.sh](mdc:clean-secrets.sh) - Script for removing sensitive data
+- [clean-secrets-callbacks/](mdc:clean-secrets-callbacks/) - Python callback functions
+- [produzionidalbasso.git/](mdc:produzionidalbasso.git/) - Processed repository

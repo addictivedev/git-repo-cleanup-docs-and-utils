@@ -1,0 +1,70 @@
+name: CI Tests
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  e2e-tests:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0  # Fetch full history for gitleaks
+    - name: Configure git
+      run: |
+        git config --global user.name "CI Bot"
+        git config --global user.email "ci@example.com"
+        git config --global init.defaultBranch main
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+    - name: Install system dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y git jq bats openjdk-11-jre-headless
+    - name: Install Python dependencies
+      run: |
+        pip install git-filter-repo
+    - name: Install BFG Repo-Cleaner
+      run: |
+        curl -L -o bfg.jar https://repo1.maven.org/maven2/com/madgag/bfg/1.14.0/bfg-1.14.0.jar
+        sudo mv bfg.jar /usr/local/bin/
+        echo '#!/bin/bash' | sudo tee /usr/local/bin/bfg
+        echo 'java -jar /usr/local/bin/bfg.jar "$@"' | sudo tee -a /usr/local/bin/bfg
+        sudo chmod +x /usr/local/bin/bfg
+    - name: Install just
+      run: |
+        curl --proto '=https' --tlsv1.2 -sSf https://just.systems/install.sh | bash -s -- --to /usr/local/bin
+    - name: Install gitleaks
+      uses: gitleaks/gitleaks-action@v2
+      env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITLEAKS_LICENSE: ${{ secrets.GITLEAKS_LICENSE }} # Only required for Organizations
+      with:
+        config-path: .gitleaks.toml
+        log-level: info
+        log-opts: --no-merges
+        
+    - name: Verify prerequisites
+      run: |
+        git --version
+        python3 --version
+        jq --version
+        bats --version
+        git-filter-repo --version
+        bfg --version
+        gitleaks version
+        just --version
+        echo "Git log entries:"
+        git log --oneline -5
+        echo "Git remote info:"
+        git remote -v        
+    - name: Run all tests
+      run: |
+        just test-all

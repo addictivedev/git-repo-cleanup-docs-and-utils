@@ -1,0 +1,155 @@
+---
+alwaysApply: true
+description: Git Repository Migration and Security Tools Integration
+---
+
+# Git Repository Migration and Security Tools
+
+This project focuses on migrating and securing Git repositories using git-filter-repo and gitleaks. The project structure and workflow are designed around these tools.
+
+## Project Overview
+
+This is a Git repository migration project that uses:
+- **git-filter-repo** for rewriting repository history (removing large files, sensitive data)
+- **gitleaks** for detecting secrets and sensitive information
+- **BATS testing framework** for automated testing
+
+## Key Project Files
+
+### Core Scripts
+- [clean-large-blobs.sh](mdc:clean-large-blobs.sh) - Removes large files from Git history
+- [clean-secrets.sh](mdc:clean-secrets.sh) - Removes sensitive data from Git history
+- [deploy.sh](mdc:deploy.sh) - Deployment script
+- [justfile](mdc:justfile) - Task runner configuration
+
+### Python Callbacks
+- [clean-secrets-callbacks/](mdc:clean-secrets-callbacks/) - Python callback functions for git-filter-repo
+  - [commit.py](mdc:clean-secrets-callbacks/commit.py) - Commit processing callbacks
+  - [file-info.py](mdc:clean-secrets-callbacks/file-info.py) - File information callbacks
+  - [message.py](mdc:clean-secrets-callbacks/message.py) - Message processing callbacks
+
+### Git Repositories
+- [produzionidalbasso.git/](mdc:produzionidalbasso.git/) - Main processed repository
+- [produzionidalbasso.git_original/](mdc:produzionidalbasso.git_original/) - Original repository backup
+- [pippo.git/](mdc:pippo.git/) - Test repository
+
+### Testing
+- [tests/bats/](mdc:tests/bats/) - BATS test files
+  - [test_clean_large_blobs.bats](mdc:tests/bats/test_clean_large_blobs.bats) - Large blob cleanup tests
+  - [test_clean_secrets.bats](mdc:tests/bats/test_clean_secrets.bats) - Secret cleanup tests
+  - [debug-gitleaks.bats](mdc:tests/bats/debug-gitleaks.bats) - Gitleaks debugging tests
+
+## Workflow Integration
+
+### Typical Migration Process
+1. **Analysis Phase**
+   ```bash
+   git filter-repo --analyze
+   ```
+
+2. **Large File Cleanup**
+   ```bash
+   ./clean-large-blobs.sh
+   ```
+
+3. **Secret Detection**
+   ```bash
+   gitleaks git -v
+   ```
+
+4. **Secret Cleanup**
+   ```bash
+   ./clean-secrets.sh
+   ```
+
+5. **Verification**
+   ```bash
+   ./tests/bats/test_clean_large_blobs.bats
+   ./tests/bats/test_clean_secrets.bats
+   ```
+
+### Configuration Files
+- [config.js](mdc:config.js) - JavaScript configuration
+- [settings.py](mdc:settings.py) - Python settings
+- [blobs-to-keep.txt](mdc:blobs-to-keep.txt) - List of blobs to preserve
+
+## Best Practices for This Project
+
+### Git Filter Repo Usage
+- Always work on fresh clones of repositories
+- Use `--analyze` first to understand repository structure
+- Test with `--dry-run` before actual execution
+- Use Python callbacks for complex filtering logic
+- Clean up reflogs and garbage collect after operations
+
+### Gitleaks Integration
+- Run gitleaks before and after cleanup operations
+- Use custom configuration files for project-specific rules
+- Generate reports for audit trails
+- Integrate with pre-commit hooks for ongoing security
+
+### Testing Strategy
+- Use BATS framework for shell script testing
+- Test both positive and negative cases
+- Verify that sensitive data is actually removed
+- Check that legitimate files are preserved
+
+### File Organization
+- Keep original repositories as backups
+- Use descriptive names for processed repositories
+- Maintain logs of all operations
+- Document any manual interventions
+
+## Common Commands in This Context
+
+### Repository Analysis
+```bash
+# Analyze repository structure
+git filter-repo --analyze
+
+# Check for secrets
+gitleaks git -v
+
+# List large files
+git rev-list --objects --all | git cat-file --batch-check='%(objecttype) %(objectname) %(objectsize) %(rest)' | awk '/^blob/ {print substr($0,6)}' | sort -k2nr | head -20
+```
+
+### Cleanup Operations
+```bash
+# Remove large files
+git filter-repo --strip-blobs-bigger-than 10M
+
+# Remove specific file types
+git filter-repo --invert-paths --path-glob '*.log'
+
+# Clean up after operations
+git reflog expire --expire=now --all
+git gc --prune=now
+```
+
+### Verification
+```bash
+# Run tests
+just test
+
+# Check repository size
+du -sh *.git
+
+# Verify no secrets remain
+gitleaks git --baseline-path previous-report.json
+```
+
+## Security Considerations
+
+- Never commit actual secrets to version control
+- Use environment variables for sensitive configuration
+- Regularly audit repository history for accidental commits
+- Implement pre-commit hooks to prevent future issues
+- Maintain audit logs of all cleanup operations
+
+## Troubleshooting
+
+- Check logs in [clean-secrets.log](mdc:clean-secrets.log) and [commit-progress.log](mdc:commit-progress.log)
+- Use debug BATS tests for detailed analysis
+- Verify git-filter-repo operations with `git cat-file` commands
+- Check gitleaks configuration and rules

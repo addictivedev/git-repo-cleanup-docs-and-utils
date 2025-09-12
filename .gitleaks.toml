@@ -1,0 +1,17 @@
+# Gitleaks configuration for Git repository cleanup project
+# This configuration allows all test files to prevent false positives
+
+[extend]
+# Use default rules
+useDefault = true
+
+[allowlist]
+# Allow all test files and directories
+description = "Allow all test files to prevent false positives"
+paths = [
+    '''tests/.*''',                        # All test files
+    '''.*\.bats''',                        # BATS test files
+    '''.*\.bash''',                        # Bash test helper files
+    '''clean-secrets-callbacks/.*''',       # Python callback files
+    '''.*\.env''',                         # Environment files (test data)
+]

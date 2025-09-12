@@ -1,0 +1,108 @@
+---
+alwaysApply: true
+description: Git Filter Repo Safety Rules
+---
+
+# Git Filter Repo Safety Rules
+
+## Critical Safety Requirements
+
+**NEVER run git-filter-repo against the repository containing the script code itself.**
+
+This project contains git-filter-repo scripts and tools for repository migration and cleanup. Running git-filter-repo against the repository containing these scripts would:
+
+- **Destroy the script code** - The scripts themselves would be processed and potentially removed
+- **Break the project** - The migration tools would no longer be available
+- **Cause data loss** - All project files, tests, and documentation could be lost
+
+## Safe Testing Practices
+
+### Always Use Temporary Directories
+
+When testing git-filter-repo operations:
+
+1. **Create random temporary test repositories** in isolated directories
+2. **Save temporary directory paths to environment variables** for easy cleanup
+3. **Use the existing test repositories** like [produzionidalbasso.git/](mdc:produzionidalbasso.git/)
+4. **Never run operations against the main project directory**
+
+### Example Safe Commands
+
+```bash
+# ✅ SAFE - Use existing test repo
+cd produzionidalbasso.git
+git filter-repo --analyze
+
+# ✅ SAFE - Create random temporary directory with env var
+export TEST_REPO_DIR=$(mktemp -d)
+cd "$TEST_REPO_DIR"
+git clone /path/to/source-repo .
+git filter-repo --strip-blobs-bigger-than 10M
+# Cleanup when done
+rm -rf "$TEST_REPO_DIR"
+
+# ✅ SAFE - Multiple temp directories
+export CLEANUP_DIR=$(mktemp -d)
+export ANALYSIS_DIR=$(mktemp -d)
+cd "$CLEANUP_DIR"
+# ... perform operations ...
+# Cleanup all temp directories
+rm -rf "$CLEANUP_DIR" "$ANALYSIS_DIR"
+
+# ❌ DANGEROUS - Never do this
+cd /Users/nicolabrisotto/SRC/PDB/produzionidalbasso_test_github_migration
+git filter-repo --analyze  # This would destroy the project!
+```
+
+### Project Structure Safety
+
+The project is organized with:
+- **Script files** in the root directory: [clean-large-blobs.sh](mdc:clean-large-blobs.sh), [clean-secrets.sh](mdc:clean-secrets.sh)
+- **Test repositories** in subdirectories: [produzionidalbasso.git/](mdc:produzionidalbasso.git/)
+- **Original backups** preserved: [produzionidalbasso.git_original/](mdc:produzionidalbasso.git_original/)
+
+### Testing Workflow
+
+1. **Use existing test repos** for development and testing
+2. **Create random temporary directories** for new test scenarios using `mktemp -d`
+3. **Store temp directory paths in environment variables** for easy cleanup
+4. **Always verify the working directory** before running git-filter-repo
+5. **Use the BATS tests** in [tests/bats/](mdc:tests/bats/) to validate operations
+6. **Clean up temporary directories** after testing
+
+### Environment Variable Best Practices
+
+```bash
+# Create and track temp directories
+export TEMP_REPO=$(mktemp -d)
+export TEMP_ANALYSIS=$(mktemp -d)
+
+# Use descriptive variable names
+export GIT_FILTER_TEST_DIR=$(mktemp -d)
+export SECRET_CLEANUP_TEST_DIR=$(mktemp -d)
+
+# Cleanup function
+cleanup_temp_dirs() {
+    rm -rf "$TEMP_REPO" "$TEMP_ANALYSIS" "$GIT_FILTER_TEST_DIR" "$SECRET_CLEANUP_TEST_DIR"
+    unset TEMP_REPO TEMP_ANALYSIS GIT_FILTER_TEST_DIR SECRET_CLEANUP_TEST_DIR
+}
+
+# Set trap for automatic cleanup on exit
+trap cleanup_temp_dirs EXIT
+```
+
+### Emergency Recovery
+
+If git-filter-repo is accidentally run against the project:
+1. **Stop immediately** - Do not continue with any operations
+2. **Restore from backup** - Use git reflog or restore from version control
+3. **Verify project integrity** - Ensure all scripts and tests are intact
+
+## Integration with Project Tools
+
+This safety rule works with:
+- [justfile](mdc:justfile) - Task runner that should respect these safety boundaries
+- [tests/bats/](mdc:tests/bats/) - Test framework that validates operations safely
+- [clean-secrets-callbacks/](mdc:clean-secrets-callbacks/) - Python callbacks for safe processing
+
+Remember: **The project directory is the tool, not the target.**
