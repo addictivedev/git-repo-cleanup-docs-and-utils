@@ -338,3 +338,131 @@ verify_important_files_preserved() {
     
     return $missing_files
 }
+
+# Create a test repository with multiple branches containing large files for protection testing
+create_test_repo_with_branches() {
+    local repo_dir="$1"
+    
+    # Initialize bare repository
+    git init --bare "$repo_dir"
+    
+    # Clone to working directory for commits
+    local work_dir="$TEST_TEMP_DIR/work-repo"
+    git clone "$repo_dir" "$work_dir"
+    cd "$work_dir"
+    
+    # Configure git user for commits
+    git config user.name "Test User"
+    git config user.email "test@example.com"
+    git config init.defaultBranch main
+    
+    # Create initial commit with normal files
+    echo "# Test Project" > README.md
+    echo "console.log('Hello World');" > app.js
+    echo "def hello(): pass" > app.py
+    git add README.md app.js app.py
+    git commit -m "Initial commit: Add basic project files"
+    
+    # Rename branch from master to main
+    git branch -m main
+    
+    # Create feature branch with large file (should be protected)
+    git checkout -b feature-branch
+    dd if=/dev/zero of=protected-file-feature.sql bs=1K count=100 2>/dev/null
+    git add protected-file-feature.sql
+    git commit -m "Add protected large file to feature branch"
+    
+    # Create develop branch with large file (should be removed)
+    git checkout main
+    git checkout -b develop
+    dd if=/dev/zero of=unprotected-file-develop.sql bs=1K count=100 2>/dev/null
+    git add unprotected-file-develop.sql
+    git commit -m "Add unprotected large file to develop branch"
+    
+    # Add more commits to make the large files not in the most recent commits
+    echo "Additional content" > additional-file.txt
+    git add additional-file.txt
+    git commit -m "Add additional file to develop branch"
+    
+    # Go back to feature branch and add more commits
+    git checkout feature-branch
+    echo "Additional content" > additional-file-feature.txt
+    git add additional-file-feature.txt
+    git commit -m "Add additional file to feature branch"
+    
+    # Push all branches
+    git push origin main
+    git push origin feature-branch
+    git push origin develop
+    
+    # Set HEAD reference in bare repository to point to main branch
+    git --git-dir="$repo_dir" symbolic-ref HEAD refs/heads/main
+    
+    # Clean up working directory
+    cd "$TEST_TEMP_DIR"
+    rm -rf "$work_dir"
+}
+
+# Verify that a specific file is protected (still exists) in a branch
+verify_files_protected_in_branch() {
+    local repo_dir="$1"
+    local branch="$2"
+    local filename="$3"
+    
+    # Clone the specific branch
+    local work_dir="$TEST_TEMP_DIR/verify-protected-$branch"
+    git clone --branch "$branch" --single-branch "$repo_dir" "$work_dir"
+    cd "$work_dir"
+    
+    local file_protected=0
+    if [[ -f "$filename" ]]; then
+        local size=$(stat -f%z "$filename" 2>/dev/null || stat -c%s "$filename" 2>/dev/null)
+        if [[ $size -gt 50000 ]]; then  # 50KB threshold
+            echo "✅ File $filename is protected in branch $branch (size: $size bytes)"
+            file_protected=0  # Success - file is protected
+        else
+            echo "ERROR: File $filename exists but is too small in branch $branch (size: $size bytes)"
+            file_protected=1  # Failure - file is not properly protected
+        fi
+    else
+        echo "ERROR: File $filename is missing from protected branch $branch"
+        file_protected=1  # Failure - file is missing
+    fi
+    
+    cd "$TEST_TEMP_DIR"
+    rm -rf "$work_dir"
+    
+    return $file_protected
+}
+
+# Verify that a specific file is removed from a branch
+verify_files_removed_from_branch() {
+    local repo_dir="$1"
+    local branch="$2"
+    local filename="$3"
+    
+    # Clone the specific branch
+    local work_dir="$TEST_TEMP_DIR/verify-removed-$branch"
+    git clone --branch "$branch" --single-branch "$repo_dir" "$work_dir"
+    cd "$work_dir"
+    
+    local file_removed=0
+    if [[ ! -f "$filename" ]]; then
+        echo "✅ File $filename is correctly removed from branch $branch"
+        file_removed=0  # Success - file is removed
+    else
+        local size=$(stat -f%z "$filename" 2>/dev/null || stat -c%s "$filename" 2>/dev/null)
+        if [[ $size -lt 50000 ]]; then  # File exists but is small (removed from history)
+            echo "✅ File $filename is removed from Git history in branch $branch (current size: $size bytes)"
+            file_removed=0  # Success - file is removed from history
+        else
+            echo "ERROR: File $filename still exists and is large in branch $branch (size: $size bytes)"
+            file_removed=1  # Failure - file is not removed
+        fi
+    fi
+    
+    cd "$TEST_TEMP_DIR"
+    rm -rf "$work_dir"
+    
+    return $file_removed
+}

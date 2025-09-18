@@ -22,11 +22,12 @@
 # consistency checks with the integrated verification functionality.
 #
 # Usage:
-#   ./clean-large-blobs.sh <GIT_DIRECTORY> <OBJECT_MAX_SIZE> [--yes]
+#   ./clean-large-blobs.sh <GIT_DIRECTORY> <OBJECT_MAX_SIZE> [--yes] [--no-verify] [--protect-blobs-from <refs>]
 #
 # Example:
 #   ./clean-large-blobs.sh ./produzionidalbasso.git 1000000
 #   ./clean-large-blobs.sh ./produzionidalbasso.git 1000000 --yes
+#   ./clean-large-blobs.sh ./produzionidalbasso.git 1000000 --protect-blobs-from HEAD,main
 
 # -----------------------------------------------------------------------------
 # --- Configuration ---
@@ -34,6 +35,7 @@
 # Initialize variables
 SKIP_CONFIRMATION=false
 VERIFY_CLEANUP=true
+PROTECT_BLOBS_FROM=""
 TEMP_DIRECTORIES=()
 
 # -----------------------------------------------------------------------------
@@ -432,16 +434,19 @@ print_temp_directories() {
 
 # Function to display usage
 usage() {
-    echo "Usage: $0 <GIT_DIRECTORY> <OBJECT_MAX_SIZE> [--yes] [--no-verify]"
+    echo "Usage: $0 <GIT_DIRECTORY> <OBJECT_MAX_SIZE> [--yes] [--no-verify] [--protect-blobs-from <refs>]"
     echo "  GIT_DIRECTORY: Path to the Git repository"
     echo "  OBJECT_MAX_SIZE: Maximum blob size in bytes"
     echo "  --yes: Skip confirmation prompt"
     echo "  --no-verify: Skip verification step"
+    echo "  --protect-blobs-from <refs>: Protect blobs from specified refs (default: HEAD)"
+    echo "    <refs> can be a comma-separated list of refs (e.g., HEAD,main,develop)"
     echo ""
     echo "Example:"
     echo "  $0 ./produzionidalbasso.git 1000000"
     echo "  $0 ./produzionidalbasso.git 1000000 --yes"
     echo "  $0 ./produzionidalbasso.git 1000000 --no-verify"
+    echo "  $0 ./produzionidalbasso.git 1000000 --protect-blobs-from HEAD,main"
     exit 1
 }
 
@@ -459,13 +464,24 @@ GIT_DIR="$1"
 OBJECT_MAX_SIZE="$2"
 
 # Check for flags
-for arg in "$@"; do
-    case "$arg" in
+PROTECT_BLOBS_FROM="HEAD"  # Default value
+for ((i=3; i<=$#; i++)); do
+    case "${!i}" in
         --yes)
             SKIP_CONFIRMATION=true
             ;;
         --no-verify)
             VERIFY_CLEANUP=false
+            ;;
+        --protect-blobs-from)
+            if [ $((i+1)) -le $# ]; then
+                next_arg=$((i+1))
+                PROTECT_BLOBS_FROM="${!next_arg}"
+                i=$((i+1))  # Skip the next argument since we consumed it
+            else
+                print_error "ERROR: --protect-blobs-from requires a value"
+                usage
+            fi
             ;;
     esac
 done
@@ -500,6 +516,7 @@ print_info "Configuration:"
 print_info "  Git directory: $GIT_DIR"
 print_info "  Maximum blob size: $OBJECT_MAX_SIZE bytes ($(($OBJECT_MAX_SIZE / 1024)) KB)"
 print_info "  Backup directory: $BACKUP_DIR"
+print_info "  Protect blobs from: $PROTECT_BLOBS_FROM"
 if [ "$SKIP_CONFIRMATION" = "true" ]; then
     print_info "  Skip confirmation: YES (--yes flag provided)"
 else
@@ -542,7 +559,7 @@ print_warning "WARNING: LARGE FILES WILL BE REMOVED"
 echo "=========================================="
 echo ""
 print_info "BFG CLEANUP SUMMARY: $LARGE_BLOBS_COUNT large files will be processed"
-print_info "  - BFG will automatically protect files in the latest commit (HEAD)"
+print_info "  - BFG will protect files from refs: $PROTECT_BLOBS_FROM"
 print_info "  - Files larger than $OBJECT_MAX_SIZE bytes will be removed from history"
 print_info "  - Repository will be cleaned and optimized"
 echo ""
@@ -601,10 +618,9 @@ print_info "Running BFG Repo-Cleaner to remove blobs larger than $BFG_SIZE..."
 # Change to git directory
 pushd "$GIT_DIR"
 
-# Run BFG with size-based filtering
-# BFG will automatically protect blobs from HEAD by default
-print_info "Running BFG with default HEAD protection..."
-bfg --strip-blobs-bigger-than "$BFG_SIZE" .
+# Run BFG with size-based filtering and custom blob protection
+print_info "Running BFG with blob protection from: $PROTECT_BLOBS_FROM"
+bfg --strip-blobs-bigger-than "$BFG_SIZE" --protect-blobs-from "$PROTECT_BLOBS_FROM" .
 
 # Clean up the repository
 print_info "Cleaning up repository..."
@@ -625,7 +641,7 @@ print_info "   • Maximum blob size: $OBJECT_MAX_SIZE bytes ($(($OBJECT_MAX_SIZ
 print_info "   • Repository: $GIT_DIR"
 print_info "   • Tool used: BFG Repo-Cleaner"
 print_info "   • Size threshold: $BFG_SIZE"
-print_info "   • Files protected: All files in HEAD commit (automatic protection)"
+print_info "   • Files protected: All files from refs: $PROTECT_BLOBS_FROM"
 echo ""
 
 # -----------------------------------------------------------------------------
@@ -650,7 +666,7 @@ BACKUP INFORMATION:
 BFG CLEANUP SUMMARY:
   Tool used: BFG Repo-Cleaner
   Size threshold: $BFG_SIZE
-  Files protected: All files in HEAD commit (automatic protection)
+  Files protected: All files from refs: $PROTECT_BLOBS_FROM
 
 REMOVED FILES SUMMARY:
 EOF

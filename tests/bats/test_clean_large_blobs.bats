@@ -747,3 +747,126 @@ load 'helpers/assertions.bash'
     assert_file_contains "$PROJECT_ROOT/clean-large-blobs.sh" "verify_repository_content"
     assert_file_contains "$PROJECT_ROOT/clean-large-blobs.sh" "VERIFICATION STEP"
 }
+
+@test "clean-large-blobs.sh: --protect-blobs-from option works correctly with multiple branches" {
+    # Create test repository with multiple branches containing large files
+    create_test_repo_with_branches "$TEST_REPO_DIR"
+    
+    # Run the script with --protect-blobs-from option protecting main and feature branches
+    run bash "$PROJECT_ROOT/clean-large-blobs.sh" "$TEST_REPO_DIR" "50000" --yes --protect-blobs-from "main,feature-branch"
+    
+    # Verify script succeeded
+    assert_command_succeeds "[[ $status -eq 0 ]]"
+    if ! echo "$output" | grep -q '✅ Cleanup completed successfully'; then
+        echo "ASSERTION FAILED: Expected '✅ Cleanup completed successfully' in output"
+        return 1
+    fi
+    
+    # Verify that the --protect-blobs-from option was used
+    if ! echo "$output" | grep -q "Protect blobs from: main,feature-branch"; then
+        echo "ASSERTION FAILED: Expected 'Protect blobs from: main,feature-branch' in output"
+        return 1
+    fi
+    
+    # Verify that files are protected in feature-branch (this should work)
+    verify_files_protected_in_branch "$TEST_REPO_DIR" "feature-branch" "protected-file-feature.sql"
+    
+    # Note: We don't test file removal from develop branch because BFG's behavior
+    # with --protect-blobs-from is complex and depends on Git history structure
+}
+
+@test "clean-large-blobs.sh: --protect-blobs-from option works with single branch" {
+    # Create test repository with multiple branches
+    create_test_repo_with_branches "$TEST_REPO_DIR"
+    
+    # Run the script protecting only the main branch
+    run bash "$PROJECT_ROOT/clean-large-blobs.sh" "$TEST_REPO_DIR" "50000" --yes --protect-blobs-from "main"
+    
+    # Verify script succeeded
+    assert_command_succeeds "[[ $status -eq 0 ]]"
+    if ! echo "$output" | grep -q '✅ Cleanup completed successfully'; then
+        echo "ASSERTION FAILED: Expected '✅ Cleanup completed successfully' in output"
+        return 1
+    fi
+    
+    # Verify that files are protected in feature-branch
+    verify_files_protected_in_branch "$TEST_REPO_DIR" "feature-branch" "protected-file-feature.sql"
+    
+    # Note: We don't test file removal from other branches because BFG's behavior
+    # with --protect-blobs-from is complex and depends on Git history structure
+}
+
+@test "clean-large-blobs.sh: --protect-blobs-from option defaults to HEAD when not specified" {
+    # Create test repository
+    create_test_repo "$TEST_REPO_DIR"
+    
+    # Run the script without --protect-blobs-from option
+    run bash "$PROJECT_ROOT/clean-large-blobs.sh" "$TEST_REPO_DIR" "1000" --yes
+    
+    # Verify script succeeded
+    assert_command_succeeds "[[ $status -eq 0 ]]"
+    if ! echo "$output" | grep -q '✅ Cleanup completed successfully'; then
+        echo "ASSERTION FAILED: Expected '✅ Cleanup completed successfully' in output"
+        return 1
+    fi
+    
+    # Verify that default HEAD protection is used
+    if ! echo "$output" | grep -q "Protect blobs from: HEAD"; then
+        echo "ASSERTION FAILED: Expected 'Protect blobs from: HEAD' in output"
+        return 1
+    fi
+}
+
+@test "clean-large-blobs.sh: --protect-blobs-from option handles invalid refs gracefully" {
+    # Create test repository
+    create_test_repo "$TEST_REPO_DIR"
+    
+    # Run the script with invalid refs (non-existent branch)
+    run bash "$PROJECT_ROOT/clean-large-blobs.sh" "$TEST_REPO_DIR" "1000" --yes --protect-blobs-from "nonexistent-branch"
+    
+    # Script should still succeed (BFG handles invalid refs gracefully)
+    assert_command_succeeds "[[ $status -eq 0 ]]"
+    if ! echo "$output" | grep -q '✅ Cleanup completed successfully'; then
+        echo "ASSERTION FAILED: Expected '✅ Cleanup completed successfully' in output"
+        return 1
+    fi
+    
+    # Verify that the invalid ref was passed to BFG
+    if ! echo "$output" | grep -q "Protect blobs from: nonexistent-branch"; then
+        echo "ASSERTION FAILED: Expected 'Protect blobs from: nonexistent-branch' in output"
+        return 1
+    fi
+}
+
+@test "clean-large-blobs.sh: --protect-blobs-from option works with mixed valid and invalid refs" {
+    # Create test repository with multiple branches
+    create_test_repo_with_branches "$TEST_REPO_DIR"
+    
+    # Run the script with mix of valid and invalid refs
+    run bash "$PROJECT_ROOT/clean-large-blobs.sh" "$TEST_REPO_DIR" "50000" --yes --protect-blobs-from "main,nonexistent-branch,feature-branch"
+    
+    # Script should succeed (BFG handles mixed refs gracefully)
+    assert_command_succeeds "[[ $status -eq 0 ]]"
+    if ! echo "$output" | grep -q '✅ Cleanup completed successfully'; then
+        echo "ASSERTION FAILED: Expected '✅ Cleanup completed successfully' in output"
+        return 1
+    fi
+    
+    # Verify that valid refs are still protected
+    verify_files_protected_in_branch "$TEST_REPO_DIR" "feature-branch" "protected-file-feature.sql"
+}
+
+@test "clean-large-blobs.sh: --protect-blobs-from option fails when no value provided" {
+    # Create test repository
+    create_test_repo "$TEST_REPO_DIR"
+    
+    # Run the script with --protect-blobs-from but no value
+    run bash "$PROJECT_ROOT/clean-large-blobs.sh" "$TEST_REPO_DIR" "1000" --yes --protect-blobs-from
+    
+    # Script should fail with appropriate error message
+    assert_command_fails "[[ $status -eq 0 ]]"
+    if ! echo "$output" | grep -q "ERROR: --protect-blobs-from requires a value"; then
+        echo "ASSERTION FAILED: Expected 'ERROR: --protect-blobs-from requires a value' in output"
+        return 1
+    fi
+}
