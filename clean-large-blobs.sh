@@ -3,31 +3,47 @@
 # clean-large-blobs.sh
 #
 # This script cleans up large blobs from a **bare git repository** using BFG Repo-Cleaner.
-# It will:
-#   - Identify blobs (files) larger than a configured size.
-#   - Show you exactly what will be removed (with file names and sizes).
-#   - Ask for confirmation before proceeding.
-#   - Preserve files in the latest commit (HEAD) automatically.
-#   - Delete all other large blobs from the history using BFG Repo-Cleaner.
+# It identifies blobs larger than a configured size, shows what will be removed,
+# asks for confirmation, and preserves files in specified refs automatically.
 #
 # BFG Repo-Cleaner is faster and more reliable than git-filter-repo for this use case.
-# It automatically protects files in the latest commit (HEAD) and provides better
-# performance for large repositories.
+# The script creates a backup before processing and enables verification functionality.
 #
-# It is safe to run repeatedly. After completion, you can re-add the origin remote
-# and push the rewritten history with `git push --mirror --force`.
-#
-# The script automatically creates a backup of the original repository before
-# processing, allowing you to restore the original state if needed and enabling
-# consistency checks with the integrated verification functionality.
-#
-# Usage:
-#   ./clean-large-blobs.sh <GIT_DIRECTORY> <OBJECT_MAX_SIZE> [--yes] [--no-verify] [--protect-blobs-from <refs>]
-#
-# Example:
-#   ./clean-large-blobs.sh ./produzionidalbasso.git 1000000
-#   ./clean-large-blobs.sh ./produzionidalbasso.git 1000000 --yes
-#   ./clean-large-blobs.sh ./produzionidalbasso.git 1000000 --protect-blobs-from HEAD,main
+# It is safe to run repeatedly. After completion, re-add the origin remote and
+# push the rewritten history with `git push --mirror --force`.
+
+# Function to display usage
+usage() {
+    echo "Usage: $0 <GIT_DIRECTORY> <OBJECT_MAX_SIZE> [--yes] [--no-verify] [--protect-blobs-from <refs>]"
+    echo ""
+    echo "DESCRIPTION:"
+    echo "  Clean up large blobs from a bare git repository using BFG Repo-Cleaner."
+    echo "  Identifies blobs larger than configured size, shows what will be removed,"
+    echo "  asks for confirmation, and preserves files in specified refs automatically."
+    echo ""
+    echo "ARGUMENTS:"
+    echo "  GIT_DIRECTORY: Path to the Git repository"
+    echo "  OBJECT_MAX_SIZE: Maximum blob size in bytes"
+    echo ""
+    echo "OPTIONS:"
+    echo "  --yes: Skip confirmation prompt"
+    echo "  --no-verify: Skip verification step"
+    echo "  --protect-blobs-from <refs>: Protect blobs from specified refs (default: HEAD)"
+    echo "    <refs> can be a comma-separated list of refs (e.g., HEAD,main,develop)"
+    echo ""
+    echo "EXAMPLES:"
+    echo "  $0 ./produzionidalbasso.git 1000000"
+    echo "  $0 ./produzionidalbasso.git 1000000 --yes"
+    echo "  $0 ./produzionidalbasso.git 1000000 --no-verify"
+    echo "  $0 ./produzionidalbasso.git 1000000 --protect-blobs-from HEAD,main"
+    echo ""
+    echo "NOTES:"
+    echo "  - BFG Repo-Cleaner is faster and more reliable than git-filter-repo"
+    echo "  - Script creates a backup before processing"
+    echo "  - Safe to run repeatedly"
+    echo "  - After completion, re-add origin remote and push with --mirror --force"
+    exit 1
+}
 
 # -----------------------------------------------------------------------------
 # --- Configuration ---
@@ -432,23 +448,6 @@ print_temp_directories() {
     echo
 }
 
-# Function to display usage
-usage() {
-    echo "Usage: $0 <GIT_DIRECTORY> <OBJECT_MAX_SIZE> [--yes] [--no-verify] [--protect-blobs-from <refs>]"
-    echo "  GIT_DIRECTORY: Path to the Git repository"
-    echo "  OBJECT_MAX_SIZE: Maximum blob size in bytes"
-    echo "  --yes: Skip confirmation prompt"
-    echo "  --no-verify: Skip verification step"
-    echo "  --protect-blobs-from <refs>: Protect blobs from specified refs (default: HEAD)"
-    echo "    <refs> can be a comma-separated list of refs (e.g., HEAD,main,develop)"
-    echo ""
-    echo "Example:"
-    echo "  $0 ./produzionidalbasso.git 1000000"
-    echo "  $0 ./produzionidalbasso.git 1000000 --yes"
-    echo "  $0 ./produzionidalbasso.git 1000000 --no-verify"
-    echo "  $0 ./produzionidalbasso.git 1000000 --protect-blobs-from HEAD,main"
-    exit 1
-}
 
 # -----------------------------------------------------------------------------
 # --- Main Script Logic ---
