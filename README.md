@@ -166,12 +166,8 @@ just list-tests
 cp -r original-repo.git backup-repo.git
 ./clean-large-blobs.sh backup-repo.git 1000000
 
-# ✅ SAFE - Use existing test repositories
-cd produzionidalbasso.git
-./clean-large-blobs.sh . 1000000
-
 # ✅ SAFE - Protect important branches
-./clean-large-blobs.sh backup-repo.git 1000000 --protect-blobs-from "main,develop"
+./clean-large-blobs.sh original-repo.git 1000000 --protect-blobs-from "main,develop"
 ```
 
 ## Project Structure
