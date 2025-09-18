@@ -7,7 +7,7 @@
 #   - Identify blobs (files) larger than a configured size.
 #   - Show you exactly what will be removed (with file names and sizes).
 #   - Ask for confirmation before proceeding.
-#   - Preserve blobs explicitly listed in the provided blob list file.
+#   - Preserve files in the latest commit (HEAD) automatically.
 #   - Delete all other large blobs from the history using BFG Repo-Cleaner.
 #
 # BFG Repo-Cleaner is faster and more reliable than git-filter-repo for this use case.
@@ -22,11 +22,11 @@
 # consistency checks with the integrated verification functionality.
 #
 # Usage:
-#   ./clean-large-blobs.sh <GIT_DIRECTORY> <BLOB_LIST_FILE> <OBJECT_MAX_SIZE> [--yes]
+#   ./clean-large-blobs.sh <GIT_DIRECTORY> <OBJECT_MAX_SIZE> [--yes]
 #
 # Example:
-#   ./clean-large-blobs.sh ./produzionidalbasso.git blobs-to-keep.txt 1000000
-#   ./clean-large-blobs.sh ./produzionidalbasso.git blobs-to-keep.txt 1000000 --yes
+#   ./clean-large-blobs.sh ./produzionidalbasso.git 1000000
+#   ./clean-large-blobs.sh ./produzionidalbasso.git 1000000 --yes
 
 # -----------------------------------------------------------------------------
 # --- Configuration ---
@@ -432,17 +432,16 @@ print_temp_directories() {
 
 # Function to display usage
 usage() {
-    echo "Usage: $0 <GIT_DIRECTORY> <BLOB_LIST_FILE> <OBJECT_MAX_SIZE> [--yes] [--no-verify]"
+    echo "Usage: $0 <GIT_DIRECTORY> <OBJECT_MAX_SIZE> [--yes] [--no-verify]"
     echo "  GIT_DIRECTORY: Path to the Git repository"
-    echo "  BLOB_LIST_FILE: File containing blob IDs to keep"
     echo "  OBJECT_MAX_SIZE: Maximum blob size in bytes"
     echo "  --yes: Skip confirmation prompt"
     echo "  --no-verify: Skip verification step"
     echo ""
     echo "Example:"
-    echo "  $0 ./produzionidalbasso.git blobs-to-keep.txt 1000000"
-    echo "  $0 ./produzionidalbasso.git blobs-to-keep.txt 1000000 --yes"
-    echo "  $0 ./produzionidalbasso.git blobs-to-keep.txt 1000000 --no-verify"
+    echo "  $0 ./produzionidalbasso.git 1000000"
+    echo "  $0 ./produzionidalbasso.git 1000000 --yes"
+    echo "  $0 ./produzionidalbasso.git 1000000 --no-verify"
     exit 1
 }
 
@@ -451,14 +450,13 @@ usage() {
 # -----------------------------------------------------------------------------
 
 # Parse command line arguments
-if [ $# -lt 3 ]; then
-    echo "ERROR: All three parameters are required."
+if [ $# -lt 2 ]; then
+    echo "ERROR: Both parameters are required."
     usage
 fi
 
 GIT_DIR="$1"
-BLOB_LIST_FILE="$2"
-OBJECT_MAX_SIZE="$3"
+OBJECT_MAX_SIZE="$2"
 
 # Check for flags
 for arg in "$@"; do
@@ -500,7 +498,6 @@ print_success "Backup created successfully: $BACKUP_DIR"
 echo ""
 print_info "Configuration:"
 print_info "  Git directory: $GIT_DIR"
-print_info "  Blob list file: $BLOB_LIST_FILE"
 print_info "  Maximum blob size: $OBJECT_MAX_SIZE bytes ($(($OBJECT_MAX_SIZE / 1024)) KB)"
 print_info "  Backup directory: $BACKUP_DIR"
 if [ "$SKIP_CONFIRMATION" = "true" ]; then
@@ -514,21 +511,6 @@ echo ""
 # --- Pre-cleanup Analysis ---
 
 print_info "ANALYZING REPOSITORY..."
-
-# Generate blob list file if it doesn't exist
-if [ ! -f "$BLOB_LIST_FILE" ]; then
-  print_info "Generating $BLOB_LIST_FILE ..."
-  git --git-dir="$GIT_DIR" rev-list --objects --all \
-    | awk '{print $1}' \
-    | git --git-dir="$GIT_DIR" cat-file --batch-check='%(objecttype) %(objectname) %(objectsize)' \
-    | awk '$1=="blob" && $3 <= '$OBJECT_MAX_SIZE' {print $2}' > "$BLOB_LIST_FILE"
-  print_info "Generated $BLOB_LIST_FILE with protected blob IDs (size <= $OBJECT_MAX_SIZE bytes)."
-fi
-
-# Convert relative blob file path to absolute path if needed
-if [[ "$BLOB_LIST_FILE" != /* ]]; then
-    BLOB_LIST_FILE="$(pwd)/$BLOB_LIST_FILE"
-fi
 
 # Simple analysis for BFG - count large blobs and show what will be removed
 LARGE_BLOBS_COUNT=$(git --git-dir="$GIT_DIR" rev-list --objects --all | awk '{print $1}' | git --git-dir="$GIT_DIR" cat-file --batch-check='%(objecttype) %(objectname) %(objectsize)' | awk '$1=="blob" && $3 > '$OBJECT_MAX_SIZE'' | wc -l)
@@ -644,7 +626,6 @@ print_info "   • Repository: $GIT_DIR"
 print_info "   • Tool used: BFG Repo-Cleaner"
 print_info "   • Size threshold: $BFG_SIZE"
 print_info "   • Files protected: All files in HEAD commit (automatic protection)"
-print_info "   • Blob list file: $BLOB_LIST_FILE"
 echo ""
 
 # -----------------------------------------------------------------------------

@@ -7,7 +7,6 @@ load 'helpers/assertions.bash'
 @test "clean-large-blobs.sh: requires BFG Repo-Cleaner to be installed" {
     # Create test repository
     create_test_repo "$TEST_REPO_DIR"
-    create_all_blobs_list "$TEST_BLOB_LIST_FILE" "$TEST_REPO_DIR"
     
     # Temporarily rename bfg command to simulate it not being installed
     local bfg_path=$(command -v bfg 2>/dev/null || echo "")
@@ -23,7 +22,7 @@ load 'helpers/assertions.bash'
     fi
     
     # Run clean-large-blobs.sh
-    run bash "$PROJECT_ROOT/clean-large-blobs.sh" "$TEST_REPO_DIR" "$TEST_BLOB_LIST_FILE" "1000" --yes
+    run bash "$PROJECT_ROOT/clean-large-blobs.sh" "$TEST_REPO_DIR" "1000" --yes
     
     # Verify script failed with appropriate error message
     assert_command_fails "[[ $status -eq 0 ]]"
@@ -43,11 +42,8 @@ load 'helpers/assertions.bash'
     # Create test repository with large files
     create_test_repo "$TEST_REPO_DIR"
     
-    # Create blob list
-    create_all_blobs_list "$TEST_BLOB_LIST_FILE" "$TEST_REPO_DIR"
-    
     # Run clean-large-blobs.sh from project root
-    run bash "$PROJECT_ROOT/clean-large-blobs.sh" "$TEST_REPO_DIR" "$TEST_BLOB_LIST_FILE" "1000" --yes
+    run bash "$PROJECT_ROOT/clean-large-blobs.sh" "$TEST_REPO_DIR" "1000" --yes
     
     # Verify script succeeded (BFG is working in test environment)
     assert_command_succeeds "[[ $status -eq 0 ]]"
@@ -63,18 +59,12 @@ load 'helpers/assertions.bash'
     assert_file_exists ".clean-large-blobs.log"
 }
 
-@test "clean-large-blobs.sh: preserves blobs listed in keep file" {
+@test "clean-large-blobs.sh: preserves files in HEAD commit automatically" {
     # Create test repository
     create_test_repo "$TEST_REPO_DIR"
-    
-    # Create blob list with specific blobs to keep
-    create_all_blobs_list "$TEST_BLOB_LIST_FILE" "$TEST_REPO_DIR"
-    
-    # Add a specific blob to the keep list
-    echo "test_blob_hash" >> "$TEST_BLOB_LIST_FILE"
     
     # Run clean-large-blobs.sh
-    run bash "$PROJECT_ROOT/clean-large-blobs.sh" "$TEST_REPO_DIR" "$TEST_BLOB_LIST_FILE" "1000" --yes
+    run bash "$PROJECT_ROOT/clean-large-blobs.sh" "$TEST_REPO_DIR" "1000" --yes
     
     # Verify script succeeded (BFG is working in test environment)
     assert_command_succeeds "[[ $status -eq 0 ]]"
@@ -90,41 +80,35 @@ load 'helpers/assertions.bash'
     assert_file_exists ".clean-large-blobs.log"
 }
 
-@test "clean-large-blobs.sh: generates blob list automatically if missing" {
+@test "clean-large-blobs.sh: works with simplified parameters" {
     # Create test repository
     create_test_repo "$TEST_REPO_DIR"
     
-    # Run clean-large-blobs.sh without blob list file
-    run bash "$PROJECT_ROOT/clean-large-blobs.sh" "$TEST_REPO_DIR" "nonexistent.txt" "1000" --yes
+    # Run clean-large-blobs.sh with new 2-parameter format
+    run bash "$PROJECT_ROOT/clean-large-blobs.sh" "$TEST_REPO_DIR" "1000" --yes
     
-    # Verify script succeeded (should create the blob list file)
+    # Verify script succeeded
     assert_command_succeeds "[[ $status -eq 0 ]]"
-    
-    # Verify blob list file was created
-    assert_file_exists "nonexistent.txt"
 }
 
 @test "clean-large-blobs.sh: handles different size thresholds correctly" {
     # Test with small threshold
     create_test_repo "$TEST_REPO_DIR"
-    create_all_blobs_list "$TEST_BLOB_LIST_FILE" "$TEST_REPO_DIR"
     
-    run bash "$PROJECT_ROOT/clean-large-blobs.sh" "$TEST_REPO_DIR" "$TEST_BLOB_LIST_FILE" "500" --yes
+    run bash "$PROJECT_ROOT/clean-large-blobs.sh" "$TEST_REPO_DIR" "500" --yes
     assert_command_succeeds "[[ $status -eq 0 ]]"
     
     # Test with large threshold - create fresh repository
     local test_repo_dir_2="$TEST_TEMP_DIR/test-repo-2.git"
-    local test_blob_list_file_2="$TEST_TEMP_DIR/blob-list-2.txt"
     create_test_repo "$test_repo_dir_2"
-    create_all_blobs_list "$test_blob_list_file_2" "$test_repo_dir_2"
     
-    run bash "$PROJECT_ROOT/clean-large-blobs.sh" "$test_repo_dir_2" "$test_blob_list_file_2" "100000" --yes
+    run bash "$PROJECT_ROOT/clean-large-blobs.sh" "$test_repo_dir_2" "100000" --yes
     assert_command_succeeds "[[ $status -eq 0 ]]"
 }
 
 @test "clean-large-blobs.sh: fails gracefully with invalid repository path" {
     # Test with non-existent repository
-    run bash "$PROJECT_ROOT/clean-large-blobs.sh" "/nonexistent/repo" "$TEST_BLOB_LIST_FILE" "1000"
+    run bash "$PROJECT_ROOT/clean-large-blobs.sh" "/nonexistent/repo" "1000"
     
     # Verify script failed
     assert_command_fails "[[ $status -eq 0 ]]"
@@ -140,7 +124,7 @@ load 'helpers/assertions.bash'
     create_test_repo "$TEST_REPO_DIR"
     
     # Test with invalid size
-    run bash "$PROJECT_ROOT/clean-large-blobs.sh" "$TEST_REPO_DIR" "$TEST_BLOB_LIST_FILE" "invalid"
+    run bash "$PROJECT_ROOT/clean-large-blobs.sh" "$TEST_REPO_DIR" "invalid"
     
     # Verify script failed
     assert_command_fails "[[ $status -eq 0 ]]"
@@ -156,29 +140,28 @@ load 'helpers/assertions.bash'
     run bash "$PROJECT_ROOT/clean-large-blobs.sh"
     assert_command_fails "[[ $status -eq 0 ]]"
     # Use a safer approach that doesn't involve shell evaluation of output
-    if ! echo "$output" | grep -q 'All three parameters are required'; then
-        echo "ASSERTION FAILED: Expected 'All three parameters are required' in output"
+    if ! echo "$output" | grep -q 'Both parameters are required'; then
+        echo "ASSERTION FAILED: Expected 'Both parameters are required' in output"
         return 1
     fi
     
     run bash "$PROJECT_ROOT/clean-large-blobs.sh" "$TEST_REPO_DIR"
     assert_command_fails "[[ $status -eq 0 ]]"
     # Use a safer approach that doesn't involve shell evaluation of output
-    if ! echo "$output" | grep -q 'All three parameters are required'; then
-        echo "ASSERTION FAILED: Expected 'All three parameters are required' in output"
+    if ! echo "$output" | grep -q 'Both parameters are required'; then
+        echo "ASSERTION FAILED: Expected 'Both parameters are required' in output"
         return 1
     fi
 }
 
-@test "clean-large-blobs.sh: handles empty blob list file" {
+@test "clean-large-blobs.sh: handles empty repository gracefully" {
     # Create test repository
     create_test_repo "$TEST_REPO_DIR"
     
-    # Create empty blob list file
-    touch "$TEST_BLOB_LIST_FILE"
+    
     
     # Run clean-large-blobs.sh
-    run bash "$PROJECT_ROOT/clean-large-blobs.sh" "$TEST_REPO_DIR" "$TEST_BLOB_LIST_FILE" "1000" --yes
+    run bash "$PROJECT_ROOT/clean-large-blobs.sh" "$TEST_REPO_DIR" "1000" --yes
     
     # Verify script succeeded
     assert_command_succeeds "[[ $status -eq 0 ]]"
@@ -191,11 +174,10 @@ load 'helpers/assertions.bash'
     # Create test repository
     create_test_repo "$TEST_REPO_DIR"
     
-    # Create blob list
-    create_all_blobs_list "$TEST_BLOB_LIST_FILE" "$TEST_REPO_DIR"
+    
     
     # Run clean-large-blobs.sh
-    run bash "$PROJECT_ROOT/clean-large-blobs.sh" "$TEST_REPO_DIR" "$TEST_BLOB_LIST_FILE" "1000" --yes
+    run bash "$PROJECT_ROOT/clean-large-blobs.sh" "$TEST_REPO_DIR" "1000" --yes
     
     # Verify script succeeded
     assert_command_succeeds "[[ $status -eq 0 ]]"
@@ -221,11 +203,10 @@ load 'helpers/assertions.bash'
     # Create test repository
     create_test_repo "$TEST_REPO_DIR"
     
-    # Create blob list
-    create_all_blobs_list "$TEST_BLOB_LIST_FILE" "$TEST_REPO_DIR"
+    
     
     # Run clean-large-blobs.sh
-    run bash "$PROJECT_ROOT/clean-large-blobs.sh" "$TEST_REPO_DIR" "$TEST_BLOB_LIST_FILE" "1000" --yes
+    run bash "$PROJECT_ROOT/clean-large-blobs.sh" "$TEST_REPO_DIR" "1000" --yes
     
     # Verify script succeeded
     assert_command_succeeds "[[ $status -eq 0 ]]"
@@ -238,11 +219,10 @@ load 'helpers/assertions.bash'
     # Create test repository
     create_test_repo "$TEST_REPO_DIR"
     
-    # Create blob list
-    create_all_blobs_list "$TEST_BLOB_LIST_FILE" "$TEST_REPO_DIR"
+    
     
     # Run clean-large-blobs.sh
-    run bash "$PROJECT_ROOT/clean-large-blobs.sh" "$TEST_REPO_DIR" "$TEST_BLOB_LIST_FILE" "1000" --yes
+    run bash "$PROJECT_ROOT/clean-large-blobs.sh" "$TEST_REPO_DIR" "1000" --yes
     
     # Verify script succeeded
     assert_command_succeeds "[[ $status -eq 0 ]]"
@@ -295,14 +275,12 @@ load 'helpers/assertions.bash'
     # Create test repository
     create_test_repo "$TEST_REPO_DIR"
     
-    # Create blob list
-    create_all_blobs_list "$TEST_BLOB_LIST_FILE" "$TEST_REPO_DIR"
+    
     
     # Define the function inline (extracted from clean-large-blobs.sh)
     preview_cleanup() {
       local git_dir="$1"
-      local blob_list_file="$2"
-      local size_threshold="$3"
+      local size_threshold="$2"
       
       echo "🔍 PREVIEW: Blobs that will be removed"
       echo "======================================"
@@ -357,17 +335,17 @@ load 'helpers/assertions.bash'
     local temp_output=$(mktemp)
     
     # Test preview with small threshold
-    preview_cleanup "$TEST_REPO_DIR" "$TEST_BLOB_LIST_FILE" "1000" > "$temp_output" 2>/dev/null || true
+    preview_cleanup "$TEST_REPO_DIR" "1000" > "$temp_output" 2>/dev/null || true
     
     # The function should work without errors
     assert_command_succeeds "[[ -f '$temp_output' ]]"
     
     # Test preview with large threshold
-    preview_cleanup "$TEST_REPO_DIR" "$TEST_BLOB_LIST_FILE" "10000000" > "$temp_output" 2>/dev/null || true
+    preview_cleanup "$TEST_REPO_DIR" "10000000" > "$temp_output" 2>/dev/null || true
     assert_command_succeeds "[[ -f '$temp_output' ]]"
     
     # Verify function can be called without errors
-    assert_command_succeeds "preview_cleanup '$TEST_REPO_DIR' '$TEST_BLOB_LIST_FILE' '50000' >/dev/null"
+    assert_command_succeeds "preview_cleanup '$TEST_REPO_DIR' '50000' >/dev/null"
     
     # Clean up
     rm -f "$temp_output"
@@ -386,11 +364,10 @@ load 'helpers/assertions.bash'
     # Create test repository
     create_test_repo "$TEST_REPO_DIR"
     
-    # Create blob list
-    create_all_blobs_list "$TEST_BLOB_LIST_FILE" "$TEST_REPO_DIR"
+    
     
     # Run with --yes flag
-    run bash "$PROJECT_ROOT/clean-large-blobs.sh" "$TEST_REPO_DIR" "$TEST_BLOB_LIST_FILE" "1000" --yes
+    run bash "$PROJECT_ROOT/clean-large-blobs.sh" "$TEST_REPO_DIR" "1000" --yes
     
     # Verify script succeeded
     assert_command_succeeds "[[ $status -eq 0 ]]"
@@ -405,9 +382,8 @@ load 'helpers/assertions.bash'
 @test "clean-large-blobs.sh: --yes flag works with different parameter orders" {
     # Test --yes flag in different positions - create fresh repository for each test
     create_test_repo "$TEST_REPO_DIR"
-    create_all_blobs_list "$TEST_BLOB_LIST_FILE" "$TEST_REPO_DIR"
     
-    run bash "$PROJECT_ROOT/clean-large-blobs.sh" "$TEST_REPO_DIR" "$TEST_BLOB_LIST_FILE" "1000" --yes
+    run bash "$PROJECT_ROOT/clean-large-blobs.sh" "$TEST_REPO_DIR" "1000" --yes
     # Script will succeed because BFG is working in test environment
     assert_command_succeeds "[[ $status -eq 0 ]]"
     # Use a safer approach that doesn't involve shell evaluation of output
@@ -418,11 +394,9 @@ load 'helpers/assertions.bash'
     
     # Create fresh repository for second test
     local test_repo_dir_2="$TEST_TEMP_DIR/test-repo-2.git"
-    local test_blob_list_file_2="$TEST_TEMP_DIR/blob-list-2.txt"
     create_test_repo "$test_repo_dir_2"
-    create_all_blobs_list "$test_blob_list_file_2" "$test_repo_dir_2"
     
-    run bash "$PROJECT_ROOT/clean-large-blobs.sh" "$test_repo_dir_2" "$test_blob_list_file_2" "1000" --yes
+    run bash "$PROJECT_ROOT/clean-large-blobs.sh" "$test_repo_dir_2" "1000" --yes
     # Script will succeed because BFG is working in test environment
     assert_command_succeeds "[[ $status -eq 0 ]]"
     # Use a safer approach that doesn't involve shell evaluation of output
@@ -434,7 +408,7 @@ load 'helpers/assertions.bash'
 
 @test "clean-large-blobs.sh: handles invalid --yes flag usage" {
     # Test with invalid --yes usage
-    run bash "$PROJECT_ROOT/clean-large-blobs.sh" "$TEST_REPO_DIR" "$TEST_BLOB_LIST_FILE" "1000" --yes --invalid
+    run bash "$PROJECT_ROOT/clean-large-blobs.sh" "$TEST_REPO_DIR" "1000" --yes --invalid
     # Script will fail because of invalid parameter, not because of BFG
     assert_command_fails "[[ $status -eq 0 ]]"
     # The script should fail with a parameter error, not BFG error
@@ -548,14 +522,12 @@ load 'helpers/assertions.bash'
     # Create test repository
     create_test_repo "$TEST_REPO_DIR"
     
-    # Create blob list
-    create_all_blobs_list "$TEST_BLOB_LIST_FILE" "$TEST_REPO_DIR"
+    
     
     # Define the refactored preview_cleanup function that uses shared functions
     preview_cleanup() {
       local git_dir="$1"
-      local blob_list_file="$2"
-      local size_threshold="$3"
+      local size_threshold="$2"
       
       echo "🔍 PREVIEW: Blobs that will be removed"
       echo "======================================"
@@ -645,7 +617,7 @@ load 'helpers/assertions.bash'
     local temp_output=$(mktemp)
     
     # Test preview with small threshold
-    preview_cleanup "$TEST_REPO_DIR" "$TEST_BLOB_LIST_FILE" "1000" > "$temp_output" 2>/dev/null || true
+    preview_cleanup "$TEST_REPO_DIR" "1000" > "$temp_output" 2>/dev/null || true
     
     # The function should work without errors
     assert_command_succeeds "[[ -f '$temp_output' ]]"
@@ -655,7 +627,7 @@ load 'helpers/assertions.bash'
     assert_command_succeeds "grep -q 'SUMMARY' '$temp_output'"
     
     # Test with large threshold (should show no blobs)
-    preview_cleanup "$TEST_REPO_DIR" "$TEST_BLOB_LIST_FILE" "10000000" > "$temp_output" 2>/dev/null || true
+    preview_cleanup "$TEST_REPO_DIR" "10000000" > "$temp_output" 2>/dev/null || true
     assert_command_succeeds "[[ -f '$temp_output' ]]"
     
     # Clean up
@@ -665,10 +637,9 @@ load 'helpers/assertions.bash'
 @test "clean-large-blobs.sh: handles BFG-specific error conditions gracefully" {
     # Create test repository
     create_test_repo "$TEST_REPO_DIR"
-    create_all_blobs_list "$TEST_BLOB_LIST_FILE" "$TEST_REPO_DIR"
     
     # Test with invalid git directory (should fail before BFG check)
-    run bash "$PROJECT_ROOT/clean-large-blobs.sh" "/nonexistent/repo" "$TEST_BLOB_LIST_FILE" "1000" --yes
+    run bash "$PROJECT_ROOT/clean-large-blobs.sh" "/nonexistent/repo" "1000" --yes
     
     # Verify script failed with appropriate error message
     assert_command_fails "[[ $status -eq 0 ]]"
@@ -683,8 +654,7 @@ load 'helpers/assertions.bash'
     # Create test repository with multiple branches
     create_test_repo "$TEST_REPO_DIR"
     
-    # Create blob list
-    create_all_blobs_list "$TEST_BLOB_LIST_FILE" "$TEST_REPO_DIR"
+    
     
     # Create additional branches in the test repository
     local work_dir="$TEST_TEMP_DIR/verify-work"
@@ -712,7 +682,7 @@ load 'helpers/assertions.bash'
     rm -rf "$work_dir"
     
     # Run the script with verification enabled (default)
-    run bash "$PROJECT_ROOT/clean-large-blobs.sh" "$TEST_REPO_DIR" "$TEST_BLOB_LIST_FILE" "1000" --yes
+    run bash "$PROJECT_ROOT/clean-large-blobs.sh" "$TEST_REPO_DIR" "1000" --yes
     
     # The script will succeed because BFG is working in test environment
     assert_command_succeeds "[[ $status -eq 0 ]]"
@@ -732,11 +702,10 @@ load 'helpers/assertions.bash'
     # Create test repository
     create_test_repo "$TEST_REPO_DIR"
     
-    # Create blob list
-    create_all_blobs_list "$TEST_BLOB_LIST_FILE" "$TEST_REPO_DIR"
+    
     
     # Run the script with verification disabled
-    run bash "$PROJECT_ROOT/clean-large-blobs.sh" "$TEST_REPO_DIR" "$TEST_BLOB_LIST_FILE" "1000" --yes --no-verify
+    run bash "$PROJECT_ROOT/clean-large-blobs.sh" "$TEST_REPO_DIR" "1000" --yes --no-verify
     
     # Script will succeed because BFG is working in test environment
     assert_command_succeeds "[[ $status -eq 0 ]]"
@@ -761,11 +730,10 @@ load 'helpers/assertions.bash'
     # Create test repository
     create_test_repo "$TEST_REPO_DIR"
     
-    # Create blob list
-    create_all_blobs_list "$TEST_BLOB_LIST_FILE" "$TEST_REPO_DIR"
+    
     
     # Run the script (this will create a backup)
-    run bash "$PROJECT_ROOT/clean-large-blobs.sh" "$TEST_REPO_DIR" "$TEST_BLOB_LIST_FILE" "1000" --yes
+    run bash "$PROJECT_ROOT/clean-large-blobs.sh" "$TEST_REPO_DIR" "1000" --yes
     
     # Script will succeed because BFG is working in test environment
     assert_command_succeeds "[[ $status -eq 0 ]]"

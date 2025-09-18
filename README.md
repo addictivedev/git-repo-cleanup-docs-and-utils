@@ -18,7 +18,7 @@ pip3 install git-filter-repo
 just test-all
 
 # Clean large files from a repository
-./clean-large-blobs.sh /path/to/repo.git /path/to/blobs-to-keep.txt 1000000
+./clean-large-blobs.sh /path/to/repo.git 1000000
 
 # Clean secrets from a repository  
 ./clean-secrets.sh /path/to/repo.git /path/to/gitleaks-scan.json
@@ -56,7 +56,7 @@ This project uses **two specialized tools** for different cleanup tasks:
 ### BFG Repo-Cleaner (`clean-large-blobs.sh`)
 - **Purpose**: Remove large files from Git history
 - **Why BFG**: Excellent performance for size-based filtering, simple configuration
-- **Features**: Size thresholds, blob protection lists, automatic HEAD protection
+- **Features**: Size thresholds, automatic HEAD protection
 
 ### git-filter-repo (`clean-secrets.sh`)  
 - **Purpose**: Remove sensitive data using sophisticated content analysis
