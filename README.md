@@ -17,8 +17,11 @@ pip3 install git-filter-repo
 # Run tests to verify everything works
 just test-all
 
-# Clean large files from a repository
+# Clean large files from a repository (files > 1MB)
 ./clean-large-blobs.sh /path/to/repo.git 1000000
+
+# Clean large files with branch protection
+./clean-large-blobs.sh /path/to/repo.git 1000000 --protect-blobs-from "main,develop"
 
 # Clean secrets from a repository  
 ./clean-secrets.sh /path/to/repo.git /path/to/gitleaks-scan.json
@@ -56,7 +59,7 @@ This project uses **two specialized tools** for different cleanup tasks:
 ### BFG Repo-Cleaner (`clean-large-blobs.sh`)
 - **Purpose**: Remove large files from Git history
 - **Why BFG**: Excellent performance for size-based filtering, simple configuration
-- **Features**: Size thresholds, automatic HEAD protection
+- **Features**: Size thresholds, automatic HEAD protection, branch-specific protection
 
 ### git-filter-repo (`clean-secrets.sh`)  
 - **Purpose**: Remove sensitive data using sophisticated content analysis
@@ -75,22 +78,41 @@ This dual approach gives us the best of both worlds: **performance** for large f
 
 ### Clean Large Files
 
-Remove files larger than a specified size from Git history while preserving important files:
+Remove files larger than a specified size from Git history while preserving files in specified branches:
 
 ```bash
-./clean-large-blobs.sh <git-directory> <blobs-to-keep-file> <max-size-bytes> [--yes] [--no-verify]
+./clean-large-blobs.sh <git-directory> <max-size-bytes> [--yes] [--no-verify] [--protect-blobs-from <refs>]
 ```
 
 **Parameters:**
-- `git-directory`: Path to the `.git` directory
-- `blobs-to-keep-file`: File containing SHA1 hashes of blobs to preserve
+- `git-directory`: Path to the Git repository
 - `max-size-bytes`: Maximum file size in bytes (e.g., 1000000 for 1MB)
 - `--yes`: Skip confirmation prompt
 - `--no-verify`: Skip verification step
+- `--protect-blobs-from <refs>`: Protect blobs from specified refs (default: HEAD)
+  - `<refs>` can be a comma-separated list of refs (e.g., HEAD,main,develop)
 
-**Example:**
+**Examples:**
+
+Basic usage (protects HEAD by default):
 ```bash
-./clean-large-blobs.sh ./my-repo.git ./blobs-to-keep.txt 1000000 --yes
+./clean-large-blobs.sh ./my-repo.git 1000000
+```
+
+Protect specific branches:
+```bash
+./clean-large-blobs.sh ./my-repo.git 1000000 --protect-blobs-from "main,develop"
+```
+
+Skip confirmation and verification:
+```bash
+./clean-large-blobs.sh ./my-repo.git 1000000 --yes --no-verify
+```
+
+**Multi-branch Protection Example:**
+```bash
+# Protect main and feature branches while removing large files from other branches
+./clean-large-blobs.sh ./my-repo.git 50000000 --protect-blobs-from "main,feature/important,release/v1.0"
 ```
 
 ### Clean Secrets
@@ -142,11 +164,14 @@ just list-tests
 ```bash
 # ✅ SAFE - Work on a copy
 cp -r original-repo.git backup-repo.git
-./clean-large-blobs.sh backup-repo.git blobs-to-keep.txt 1000000
+./clean-large-blobs.sh backup-repo.git 1000000
 
 # ✅ SAFE - Use existing test repositories
 cd produzionidalbasso.git
-./clean-large-blobs.sh . blobs-to-keep.txt 1000000
+./clean-large-blobs.sh . 1000000
+
+# ✅ SAFE - Protect important branches
+./clean-large-blobs.sh backup-repo.git 1000000 --protect-blobs-from "main,develop"
 ```
 
 ## Project Structure
