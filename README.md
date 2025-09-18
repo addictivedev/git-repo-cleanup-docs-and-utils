@@ -46,7 +46,7 @@ pip3 install git-filter-repo
 ./clean-large-blobs.sh /path/to/repo.git 1000000 --protect-blobs-from "main,develop"
 
 # Create gitleaks scan for secrets (run from within the repo)
-cd /path/to/repo && gitleaks git -v --log-level info --log-format json > secrets-scan.json
+cd /path/to/repo.git && gitleaks git -v --log-level trace --report-format json > ../repo-secrets-scan.json
 
 # Clean secrets from a repository  
 ./clean-secrets.sh /path/to/repo.git /path/to/gitleaks-scan.json
